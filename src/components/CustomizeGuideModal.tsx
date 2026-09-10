@@ -68,6 +68,16 @@ export default function CustomizeGuideModal({ isOpen, onClose }: CustomizeGuideM
                 Add new items to <code className="text-white bg-zinc-900 px-1 py-0.5">ACTING_PROJECTS</code> with Title, Role, Year, Category, Synopsis, and Media URL. They render immediately as responsive cards with modal dialogs.
               </p>
             </div>
+
+            <div className="p-4 bg-zinc-950 border border-zinc-800">
+              <div className="flex items-center gap-2 mb-2 text-white font-mono text-xs font-semibold uppercase">
+                <Sparkles className="w-4 h-4 text-zinc-300" />
+                <span>4. Drag & Drop Acting Reel Video</span>
+              </div>
+              <p className="text-xs text-zinc-400 font-sans-clean leading-relaxed">
+                You can drag and drop your showreel video (<code className="text-white bg-zinc-900 px-1 py-0.5">.mp4</code>, <code className="text-white bg-zinc-900 px-1 py-0.5">.webm</code>, or <code className="text-white bg-zinc-900 px-1 py-0.5">.mov</code>) directly onto the Acting Reel player or click <code className="text-white bg-zinc-900 px-1 py-0.5">Upload Video Reel</code>. It will load instantly and autoplay with interactive scrub, loop, and audio controls.
+              </p>
+            </div>
           </div>
 
           <div className="mt-8 pt-4 border-t border-zinc-800 flex justify-end">

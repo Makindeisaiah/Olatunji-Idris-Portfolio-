@@ -1,6 +1,20 @@
-import { useState } from 'react';
-import { motion } from 'motion/react';
-import { Play, Pause, Volume2, VolumeX, Maximize2, Clapperboard, ArrowUpRight, PlusCircle, CheckCircle2, Film } from 'lucide-react';
+import { useState, useRef, useEffect, DragEvent, ChangeEvent } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Play, 
+  Pause, 
+  Volume2, 
+  VolumeX, 
+  Maximize2, 
+  Clapperboard, 
+  ArrowUpRight, 
+  PlusCircle, 
+  CheckCircle2, 
+  Film, 
+  UploadCloud, 
+  RotateCcw,
+  Sparkles
+} from 'lucide-react';
 import { PORTFOLIO_INFO, HEADSHOTS, ACTING_PROJECTS, ASSETS } from '../data/portfolioData';
 import { ProjectItem } from '../types';
 
@@ -12,12 +26,150 @@ interface ActingProps {
 
 export default function Acting({ onOpenImage, onSelectProject, onNavigate }: ActingProps) {
   const [isPlayingReel, setIsPlayingReel] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true); // muted initially to guarantee browser autoplay works
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [videoFileName, setVideoFileName] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'Theatrical' | 'Commercial' | 'Dramatic' | 'Editorial'>('All');
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const filteredHeadshots = selectedFilter === 'All'
     ? HEADSHOTS
     : HEADSHOTS.filter((h) => h.type === selectedFilter);
+
+  // Handle uploaded video file
+  const loadVideoFile = (file: File) => {
+    if (!file.type.startsWith('video/') && !file.name.match(/\.(mp4|webm|ogg|mov|m4v)$/i)) {
+      alert('Please upload a valid video file (.mp4, .webm, .mov, etc.)');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setVideoSrc(url);
+    setVideoFileName(file.name);
+    setIsPlayingReel(true);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only turn off if leaving container
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      loadVideoFile(file);
+    }
+  };
+
+  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      loadVideoFile(file);
+    }
+  };
+
+  // Video playback effect
+  useEffect(() => {
+    if (videoRef.current) {
+      if (isPlayingReel) {
+        videoRef.current.play().catch(() => {
+          // Autoplay policy might need muted on first attempt
+          if (videoRef.current) {
+            videoRef.current.muted = true;
+            setIsMuted(true);
+            videoRef.current.play().catch((err) => console.log('Video play error:', err));
+          }
+        });
+      } else {
+        videoRef.current.pause();
+      }
+    }
+  }, [isPlayingReel, videoSrc]);
+
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (isPlayingReel) {
+        videoRef.current.pause();
+        setIsPlayingReel(false);
+      } else {
+        videoRef.current.play().catch((err) => console.log('Video play error:', err));
+        setIsPlayingReel(true);
+      }
+    } else {
+      setIsPlayingReel(!isPlayingReel);
+    }
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    } else {
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+      if (videoRef.current.duration) {
+        setDuration(videoRef.current.duration);
+      }
+    }
+  };
+
+  const handleSeek = (e: ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
+    if (videoRef.current) {
+      videoRef.current.currentTime = time;
+      setCurrentTime(time);
+    }
+  };
+
+  const handleFullscreen = () => {
+    if (containerRef.current) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        containerRef.current.requestFullscreen().catch((err) => console.log('Fullscreen error:', err));
+      }
+    }
+  };
+
+  const handleResetVideo = () => {
+    if (videoRef.current) {
+      videoRef.current.pause();
+    }
+    setVideoSrc(null);
+    setVideoFileName(null);
+    setIsPlayingReel(false);
+    setCurrentTime(0);
+  };
+
+  const formatTime = (timeInSeconds: number) => {
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   return (
     <section id="acting" className="relative py-28 px-6 sm:px-12 bg-[#09090b] border-t border-zinc-900 overflow-hidden">
@@ -158,99 +310,248 @@ export default function Acting({ onOpenImage, onSelectProject, onNavigate }: Act
 
         {/* 3. Acting Reel */}
         <div className="mb-28">
-          <div className="mb-8">
-            <span className="text-xs font-mono tracking-[0.2em] text-zinc-500 uppercase block mb-1">
-              Screen Performance
-            </span>
-            <h3 className="font-display text-2xl sm:text-3xl font-bold uppercase tracking-wide text-white">
-              Acting Reel
-            </h3>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+            <div>
+              <span className="text-xs font-mono tracking-[0.2em] text-zinc-500 uppercase block mb-1">
+                Screen Performance
+              </span>
+              <h3 className="font-display text-2xl sm:text-3xl font-bold uppercase tracking-wide text-white">
+                Acting Reel
+              </h3>
+            </div>
+
+            {/* Video File Actions */}
+            <div className="flex items-center gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/*,.mp4,.webm,.mov,.m4v"
+                onChange={handleFileInputChange}
+                className="hidden"
+                id="acting-reel-file-input"
+              />
+
+              {videoSrc ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-zinc-400 bg-zinc-900 px-2.5 py-1 border border-zinc-800 truncate max-w-[200px]">
+                    {videoFileName}
+                  </span>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3 py-1.5 text-xs font-mono uppercase tracking-wider bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>Replace</span>
+                  </button>
+                  <button
+                    onClick={handleResetVideo}
+                    className="px-3 py-1.5 text-xs font-mono uppercase tracking-wider bg-zinc-950 hover:bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Reset to default cover"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  id="acting-reel-browse-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 text-xs font-mono uppercase tracking-wider bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 transition-all flex items-center gap-2 cursor-pointer group"
+                >
+                  <UploadCloud className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                  <span>Upload Video Reel</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="relative bg-zinc-950 border border-zinc-800 overflow-hidden shadow-2xl">
-            {/* Reel Video Frame */}
-            <div className="relative aspect-video w-full overflow-hidden flex items-center justify-center bg-black">
-              <img
-                src={ASSETS.actingReelCover}
-                alt="Olatunji Idris Acting Reel Cover"
-                referrerPolicy="no-referrer"
-                className={`w-full h-full object-cover filter contrast-[110%] transition-opacity duration-500 ${
-                  isPlayingReel ? 'opacity-30' : 'opacity-85'
-                }`}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/30" />
-
-              {/* Central Play/State Display */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
-                <button
-                  id="acting-reel-play-button"
-                  onClick={() => setIsPlayingReel(!isPlayingReel)}
-                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center transition-all duration-300 transform hover:scale-105 shadow-2xl cursor-pointer group mb-4"
-                  aria-label={isPlayingReel ? 'Pause Reel' : 'Play Reel'}
+          {/* Reel Interactive Player & Drag-and-Drop Target */}
+          <div
+            ref={containerRef}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`relative bg-zinc-950 border transition-all duration-300 overflow-hidden shadow-2xl group/reel ${
+              isDragging
+                ? 'border-white ring-2 ring-white/40 scale-[1.005]'
+                : 'border-zinc-800 hover:border-zinc-600'
+            }`}
+          >
+            {/* Drag & Drop Visual Overlay */}
+            <AnimatePresence>
+              {isDragging && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-40 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center border-2 border-dashed border-white p-6 text-center pointer-events-none"
                 >
-                  {isPlayingReel ? (
-                    <Pause className="w-8 h-8 fill-black" />
-                  ) : (
-                    <Play className="w-8 h-8 fill-black translate-x-0.5" />
-                  )}
-                </button>
+                  <motion.div
+                    animate={{ scale: [1, 1.08, 1], y: [0, -6, 0] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center mb-4 shadow-xl"
+                  >
+                    <UploadCloud className="w-8 h-8" />
+                  </motion.div>
+                  <h4 className="font-display text-xl sm:text-2xl font-bold uppercase text-white tracking-wider mb-1">
+                    Drop Video File to Autoplay
+                  </h4>
+                  <p className="text-xs sm:text-sm font-mono text-zinc-400 max-w-md">
+                    Supports .mp4, .webm, .mov video files. Reel will begin playing immediately upon drop.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                <p className="font-display text-lg sm:text-2xl font-bold uppercase text-white tracking-wider">
-                  {isPlayingReel ? 'Showreel Preview Active' : 'Olatunji Idris — Theatrical Reel'}
-                </p>
-                <p className="text-xs sm:text-sm text-zinc-400 font-mono tracking-wide max-w-md mt-1">
-                  Dramatic scenes, monologue dynamics, and screen presence showcase (2026)
-                </p>
+            {/* Video or Poster Frame */}
+            <div className="relative aspect-video w-full overflow-hidden flex items-center justify-center bg-black">
+              {videoSrc ? (
+                <video
+                  ref={videoRef}
+                  src={videoSrc}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  playsInline
+                  loop
+                  muted={isMuted}
+                  onTimeUpdate={handleTimeUpdate}
+                  onPlay={() => setIsPlayingReel(true)}
+                  onPause={() => setIsPlayingReel(false)}
+                  onClick={togglePlay}
+                />
+              ) : (
+                <>
+                  <img
+                    src={ASSETS.actingReelCover}
+                    alt="Olatunji Idris Acting Reel Cover"
+                    referrerPolicy="no-referrer"
+                    className={`w-full h-full object-cover filter contrast-[110%] transition-opacity duration-500 ${
+                      isPlayingReel ? 'opacity-30' : 'opacity-85'
+                    }`}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/30" />
 
-                {isPlayingReel && (
-                  <div className="mt-4 px-4 py-2 bg-zinc-900/90 border border-zinc-700 text-xs font-mono text-zinc-300">
-                    Playback simulator running • Link to your Vimeo or YouTube reel can be embedded in portfolioData.ts
+                  {/* Central Play/State Display when no video uploaded yet */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                    <button
+                      id="acting-reel-play-button"
+                      onClick={togglePlay}
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center transition-all duration-300 transform hover:scale-105 shadow-2xl cursor-pointer group mb-4"
+                      aria-label={isPlayingReel ? 'Pause Reel' : 'Play Reel'}
+                    >
+                      {isPlayingReel ? (
+                        <Pause className="w-8 h-8 fill-black" />
+                      ) : (
+                        <Play className="w-8 h-8 fill-black translate-x-0.5" />
+                      )}
+                    </button>
+
+                    <p className="font-display text-lg sm:text-2xl font-bold uppercase text-white tracking-wider">
+                      {isPlayingReel ? 'Showreel Preview Active' : 'Olatunji Idris — Theatrical Reel'}
+                    </p>
+                    <p className="text-xs sm:text-sm text-zinc-400 font-mono tracking-wide max-w-md mt-1">
+                      Dramatic scenes, monologue dynamics, and screen presence showcase (2026)
+                    </p>
+
+                    {/* Drag-and-drop prompt badge inside player */}
+                    <div 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-6 px-4 py-2.5 bg-zinc-900/85 hover:bg-zinc-800/95 border border-zinc-700/80 text-xs font-mono text-zinc-300 flex items-center gap-2.5 cursor-pointer backdrop-blur-sm transition-all hover:border-zinc-400"
+                    >
+                      <UploadCloud className="w-4 h-4 text-white animate-pulse" />
+                      <span>Drag & drop a video file here to autoplay reel, or click to browse</span>
+                    </div>
                   </div>
+                </>
+              )}
+
+              {/* Top Bar Details */}
+              <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none z-20">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono tracking-widest uppercase bg-black/85 text-zinc-300 px-2.5 py-1 border border-zinc-800 backdrop-blur-sm">
+                    {videoSrc ? 'Custom Reel Loaded' : 'Acting Reel Showcase'}
+                  </span>
+                  {videoSrc && isPlayingReel && (
+                    <span className="flex items-center gap-1.5 text-[10px] font-mono tracking-widest uppercase bg-emerald-950 text-emerald-400 px-2 py-0.5 border border-emerald-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                      Autoplaying
+                    </span>
+                  )}
+                </div>
+
+                {isMuted && videoSrc && (
+                  <button
+                    onClick={toggleMute}
+                    className="pointer-events-auto text-[11px] font-mono bg-black/80 hover:bg-white text-zinc-300 hover:text-black px-3 py-1 border border-zinc-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Muted (Click to unmute)</span>
+                  </button>
                 )}
               </div>
 
               {/* Video Player Bottom Controls Bar */}
-              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/80 to-transparent flex items-center justify-between z-20">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setIsPlayingReel(!isPlayingReel)}
-                    className="text-white hover:text-zinc-300 cursor-pointer p-1"
-                    aria-label="Play/Pause"
-                  >
-                    {isPlayingReel ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
-                  </button>
-                  <button
-                    onClick={() => setIsMuted(!isMuted)}
-                    className="text-zinc-400 hover:text-white cursor-pointer p-1"
-                    aria-label="Toggle audio"
-                  >
-                    {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                  </button>
-                  <span className="text-[11px] font-mono text-zinc-400">
-                    {isPlayingReel ? '01:42 / 03:15' : '00:00 / 03:15'}
-                  </span>
-                </div>
+              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/85 to-transparent flex flex-col gap-2 z-20">
+                {/* Progress Scrub Bar (when video loaded) */}
+                {videoSrc && duration > 0 && (
+                  <div className="w-full flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={0}
+                      max={duration}
+                      step={0.1}
+                      value={currentTime}
+                      onChange={handleSeek}
+                      className="w-full h-1 bg-zinc-800 rounded-none accent-white cursor-pointer hover:h-1.5 transition-all"
+                    />
+                  </div>
+                )}
 
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-mono tracking-widest uppercase bg-red-950 text-red-400 border border-red-800 px-2 py-0.5">
-                    HD 1080P
-                  </span>
-                  <button
-                    onClick={() =>
-                      onOpenImage(
-                        ASSETS.actingReelCover,
-                        'Olatunji Idris — Showreel Cover',
-                        'Scene Study & Dramatic Acting Reel'
-                      )
-                    }
-                    className="text-zinc-400 hover:text-white cursor-pointer p-1"
-                    aria-label="Expand Reel Still"
-                  >
-                    <Maximize2 className="w-4 h-4" />
-                  </button>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={togglePlay}
+                      className="text-white hover:text-zinc-300 cursor-pointer p-1 transition-colors"
+                      aria-label="Play/Pause"
+                    >
+                      {isPlayingReel ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
+                    </button>
+                    <button
+                      onClick={toggleMute}
+                      className="text-zinc-400 hover:text-white cursor-pointer p-1 transition-colors"
+                      aria-label="Toggle audio"
+                    >
+                      {isMuted ? <VolumeX className="w-4 h-4 text-amber-400" /> : <Volume2 className="w-4 h-4" />}
+                    </button>
+                    <span className="text-[11px] font-mono text-zinc-400">
+                      {videoSrc ? `${formatTime(currentTime)} / ${formatTime(duration)}` : (isPlayingReel ? '01:42 / 03:15' : '00:00 / 03:15')}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-mono tracking-widest uppercase bg-red-950 text-red-400 border border-red-800 px-2 py-0.5">
+                      HD 1080P
+                    </span>
+                    <button
+                      onClick={handleFullscreen}
+                      className="text-zinc-400 hover:text-white cursor-pointer p-1 transition-colors"
+                      aria-label="Toggle fullscreen"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Quick instructions under reel */}
+          <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between text-xs font-mono text-zinc-500 gap-2">
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-zinc-400" />
+              Tip: Drag and drop your reel video file anywhere onto the player above to preview and autoplay immediately.
+            </span>
+            <span>Audio starts muted for seamless browser autoplay — click unmute anytime</span>
           </div>
         </div>
 
